@@ -56,7 +56,7 @@ Restoration Edge 改善的是觀看品質。對於已被完整刪除、塗黑或
 
 ## Support URL
 
-待填：公開支援頁面 URL
+https://restoration-studio-cloud.vercel.app/help
 
 ## Privacy Policy URL
 

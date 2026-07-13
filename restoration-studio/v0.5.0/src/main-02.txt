@@ -1,0 +1,47 @@
+">停止上傳</button></div>
+        </div>
+        <aside class="panel route-panel"><div class="eyebrow">ROUTE EXPLAINER</div><h2>三種處理方式</h2>
+          <div class="route"><b>瀏覽器照片</b><p>最快、免安裝。適合32MP以下照片；處理後成品上傳個人私有Bucket。</p></div>
+          <div class="route"><b>直接本機 Worker</b><p>最適合兩小時影片。原始檔不離開你的電腦，5分鐘一個檢查點。</p></div>
+          <div class="route"><b>雲端分段中繼</b><p>適合手機上傳、電腦處理。雲端只保留有限緩衝，Worker消化後立即刪除。</p></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="view-jobs" class="view">
+      <div class="page-title"><div><div class="eyebrow">DURABLE QUEUE</div><h1>我的工作</h1><p>工作進度、分段檢查點、錯誤與成品都與帳號隔離。</p></div><div class="toolbar"><select id="jobFilter"><option value="all">全部狀態</option><option value="active">進行中</option><option value="completed">已完成</option><option value="failed">失敗／取消</option></select><button id="refreshJobs" class="secondary">重新整理</button></div></div>
+      <div id="jobStats" class="stats"></div><div id="jobsList" class="job-list"><div class="empty">登入後顯示工作。</div></div>
+    </section>
+
+    <section id="view-workers" class="view">
+      <div class="page-title"><div><div class="eyebrow">PERSONAL COMPUTE</div><h1>個人 Worker</h1><p>把耗時運算留在自己的電腦，雲端只負責可靠協調。</p></div><a class="button primary" href="/downloads/restoration-worker-v0.5.0.zip">下載 Worker v0.5.0</a></div>
+      <div class="worker-grid">
+        <div class="panel"><h2>1. 建立雲端 Worker Token</h2><p>Token只會顯示一次，可隨時撤銷；Worker不會取得你的密碼或Supabase管理金鑰。</p><label>Token名稱<input id="tokenName" value="My PC"></label><button id="createToken" class="primary">產生 Token</button><div id="newTokenBox" class="secret-box" hidden><b>請立即複製</b><code id="newToken"></code><div><button id="copyToken" class="secondary small">複製</button><button id="downloadWorkerConfig" class="secondary small">下載設定檔</button></div></div><div id="tokenList" class="stack"></div></div>
+        <div class="panel"><h2>2. 連接本機瀏覽器橋接</h2><p>Worker第一次設定會顯示本機配對密碼。它只保存在這台瀏覽器。</p><label>本機配對密碼<input id="pairingSecret" type="password" autocomplete="off" placeholder="貼上 Worker 顯示的配對密碼"></label><div class="button-row"><button id="savePairing" class="primary">儲存並檢查</button><button id="clearPairing" class="ghost">清除</button></div><div id="localWorkerCard" class="health-card">尚未檢查</div></div>
+      </div>
+      <div class="panel"><div class="panel-head"><div><h2>已註冊 Worker</h2><p class="muted">超過45秒沒有心跳即顯示離線。</p></div><button id="refreshWorkers" class="secondary">重新整理</button></div><div id="workerList" class="worker-list"><div class="empty">登入後顯示Worker。</div></div></div>
+      <div class="panel setup"><h2>Windows快速安裝</h2><pre><code>winget install Gyan.FFmpeg
+# 解壓縮下載的 Worker
+.\install.ps1
+.\configure.ps1 -WorkerToken "網站產生的Token"
+.\run.ps1</code></pre><p>Worker僅監聽 <code>127.0.0.1:8787</code>，不對區域網路或公網開放。</p></div>
+    </section>
+
+    <section id="view-account" class="view">
+      <div class="page-title"><div><div class="eyebrow">ACCOUNT & PRIVACY</div><h1>帳號與資料</h1><p>管理個人資料、密碼、保留期限與完整刪除。</p></div></div>
+      <div id="accountLoggedOut" class="panel empty">請先登入。</div>
+      <div id="accountContent" class="account-grid" hidden>
+        <form id="profileForm" class="panel"><h2>個人資料</h2><label>顯示名稱<input id="displayName" maxlength="80" required></label><label>電子郵件<input id="accountEmail" disabled></label><label>語言<select id="locale"><option value="zh-TW">繁體中文</option><option value="en">English</option></select></label><button class="primary">儲存資料</button></form>
+        <form id="passwordForm" class="panel"><h2>更新密碼</h2><label>新密碼<input id="newPassword" type="password" minlength="10" autocomplete="new-password" required></label><label>再次輸入<input id="confirmPassword" type="password" minlength="10" required></label><button class="secondary">更新密碼</button></form>
+        <div class="panel"><h2>雲端資料概況</h2><div id="usageSummary" class="usage"></div><button id="purgeCompleted" class="secondary">刪除已完成工作與雲端成品</button></div>
+        <div class="panel danger-zone"><h2>危險區域</h2><p>此操作會立即清除工作、Token、稽核資料與私有雲端物件，並建立Supabase Auth主帳號刪除申請；個人Worker上的本機成品需自行刪除。</p><button id="deleteAccount" class="danger">清除資料並申請刪除帳號</button></div>
+      </div>
+    </section>
+  </main>
+
+  <footer><div>Restoration Studio Cloud v<span id="footerVersion"></span></div><div><a href="/privacy.html">隱私政策</a><a href="/terms.html">使用條款</a><a href="/security.html">安全說明</a><a href="/help.html">操作說明</a></div></footer>
+
+  <dialog id="authDialog"><div class="dialog-head"><h2 id="authTitle">登入</h2><button id="closeAuth" class="icon-button">×</button></div><div class="tabs"><button id="loginTab" class="active">登入</button><button id="signupTab">註冊</button><button id="resetTab">忘記密碼</button></div><form id="loginForm"><label>電子郵件<input id="loginEmail" type="email" autocomplete="email" required></label><label>密碼<input id="loginPassword" type="password" autocomplete="current-password" required></label><button class="primary">登入</button></form><form id="signupForm" hidden><label>顯示名稱<input id="signupName" required maxlength="80"></label><label>電子郵件<input id="signupEmail" type="email" required></label><label>密碼<input id="signupPassword" type="password" minlength="10" required></label><button class="primary">建立帳號</button></form><form id="resetForm" hidden><label>電子郵件<input id="resetEmail" type="email" required></label><button class="primary">寄送重設信</button></form><div id="authError" class="error" hidden></div></dialog>
+
+  <dialog id="jobDialog" class="job-dialog"><div class="dialog-head"><div><div class="eyebrow">JOB DETAIL</div><h2 id="detailTitle">工作詳情</h2></div><button id="closeJob" class="icon-button">×</button></div><div id="jobDetail"></div></dialog>
+  <dialog id="confirmDialog"><div class="dialog-head"><h2 id="confirmTitle">確認</h2></div><p id="confirmMessage"></p><label id="confirmInputWrap" hidden>輸入確認文字<input id="confirmInput"></label><div class="button-row"><button id="confirmCancel" class=

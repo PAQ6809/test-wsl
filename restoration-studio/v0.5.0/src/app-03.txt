@@ -29,7 +29,9 @@ offset=Number(local.received||0);const chunk=8*1024*1024;
     const metadata={kind:"browser_image",input_resolution:[Math.round(width/scale),Math.round(target/scale)],output_resolution:[width,target],preset:$("preset").value,quality,truth_note:"改善觀看品質，不宣稱找回已刪除或刻意遮蔽的原始像素。"};const completed=await sb.rpc("restoration_complete_browser_image",{p_job_id:job.id,p_object_path:objectPath,p_size:blob.size,p_sha256:hash,p_mime:"image/jpeg",p_metadata:metadata});if(completed.error)throw completed.error;showUpload("照片修復完成",100)
   }
   async function processPixels(imageData,strength){
-    if(!window.Worker)return imageData;return new Promise((resolve,reject)=>{const worker=new Worker("/image-worker.js");worker.onmessage=e=>{imageData.data.set(new Uint8ClampedArray(e.data.pixels));worker.terminate();resolve(imageData)};worker.onerror=e=>{worker.terminate();reject(e)};worker.postMessage({pixels:imageData.data.buffer,width:imageData.width,height:imageData.height,strength},[imageData.data.buffer])})
+    if(!window.Worker)return imageData;
+    const width=imageData.width,height=imageData.height,pixels=imageData.data.buffer;
+    return new Promise((resolve,reject)=>{const worker=new Worker("/image-worker.js");worker.onmessage=e=>{worker.terminate();resolve(new ImageData(new Uint8ClampedArray(e.data.pixels),width,height))};worker.onerror=e=>{worker.terminate();reject(e)};worker.postMessage({pixels,width,height,strength},[pixels])})
   }
 
   async function loadJobs(){

@@ -1,0 +1,8 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#080b10"><meta name="description" content="Restoration Studio Cloud 使用條款"><link rel="icon" href="/assets/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><title>使用條款｜Restoration Studio Cloud</title></head><body><main class="legal-shell"><nav class="legal-nav"><a class="brand" href="/"><span>R</span> Restoration Studio Cloud</a><a class="button secondary" href="/">返回工作台</a></nav><article class="legal-card"><div class="eyebrow">TERMS OF USE</div><h1>使用條款</h1><p class="legal-date">生效日期：2026年7月13日｜版本 1.0</p>
+<h2>授權素材限定</h2><p>使用者必須擁有素材，或已取得足以進行上傳、處理與保存的合法授權。禁止用於破解他人隱私遮蔽、辨識刻意匿名化人物、還原私密部位、未經同意的監控或其他侵害權利的用途。</p>
+<h2>畫質與真實性</h2><p>去噪、去壓縮、補幀、超解析與生成式修復可能產生原始畫面不存在的細節。輸出不得被宣稱為法證性還原、身分證明或原始事實。完整刪除、塗黑或強馬賽克後的資訊通常不可驗證地恢復。</p>
+<h2>服務可用性</h2><p>長影片處理仰賴使用者電腦、FFmpeg、磁碟空間、網路與 Personal Worker。檢查點與重試可降低失敗成本，但不構成百分之百不中斷的保證。使用者應保留原始檔備份。</p>
+<h2>資源與公平使用</h2><p>免費基礎設施具有容量、流量和請求限制。系統可限制檔案長度、並行工作、雲端緩衝與保留期限，以維持安全及可用性。</p>
+<h2>帳號責任</h2><p>使用者須保護密碼、配對密碼及 Worker Token。懷疑外洩時應立即撤銷 Token、更新密碼並停止Worker。</p>
+<h2>終止與刪除</h2><p>違反授權素材、隱私或安全規則的工作可被停止或刪除。使用者可自行清除產品資料並提出帳號刪除申請。</p>
+<h2>開源元件</h2><p>Personal Worker 使用 FFmpeg、OpenCV、FastAPI 等開源元件；各元件仍受其原始授權條款約束。</p></article></main></body></html>

@@ -1,0 +1,46 @@
+ r=await fetch(`${C.localWorkerUrl}/v1/health`,{cache:"no-store",signal:controller.signal});if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      state.localHealth=await r.json();$("localStatus").textContent=state.localHealth.ok?(state.localHealth.cloud_connected?"已連線":"已啟動／未連雲端"):"缺少FFmpeg";$("localStatus").className=state.localHealth.ok?"good":"warning";
+      $("localWorkerCard").className="health-card good";$("localWorkerCard").innerHTML=`<b>Worker 已啟動</b><br>版本 ${escapeHtml(state.localHealth.version)} · ${state.localHealth.cloud_connected?"雲端已連接":"尚未設定Worker Token"}<br>可用磁碟 ${formatBytes(state.localHealth.free_disk_bytes)}`;
+      if(showToast)toast("本機 Worker 連線成功");return state.localHealth;
+    }catch(e){state.localHealth=null;$("localStatus").textContent="未連線";$("localStatus").className="warning";$("localWorkerCard").className="health-card";$("localWorkerCard").textContent="無法連到 127.0.0.1:8787。請啟動Worker，並確認瀏覽器允許localhost連線。";if(showToast)toast("找不到本機 Worker",true);return null}
+  }
+
+  function escapeHtml(value){return String(value??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+  function chooseRoute(){
+    const f=state.file;let mode=$("processingMode").value;if(!f)return {mode:null,reason:"選擇檔案後顯示建議。"};
+    const image=f.type.startsWith("image/");
+    if(mode==="auto"){if(image&&f.size<=30*1024**2)mode="browser_image";else if(state.localHealth?.ok&&state.localHealth.cloud_connected&&localStorage.getItem("restorationPairing"))mode="direct_local";else mode="cloud_relay"}
+    const reason={browser_image:"照片會在瀏覽器本機修復，只有成品存入私有雲端。",direct_local:"原始檔會分段直送localhost Worker；最適合長影片。",cloud_relay:"檔案會拆成6MB片段，供已登入的個人Worker邊接收邊刪除。"}[mode];
+    return {mode,reason};
+  }
+  function updateRoute(){const route=chooseRoute();$("routeAdvice").textContent=route.reason;updateStartButton()}
+  function updateStartButton(){$("startJob").disabled=!(state.user&&state.file&&$("consent").checked&&!state.uploadAbort)}
+  $("mediaFile").onchange=()=>{state.file=$("mediaFile").files[0]||null;if(state.file){$("fileName").textContent=state.file.name;$("fileMeta").textContent=`${formatBytes(state.file.size)} · ${state.file.type||"未知格式"}`}else{$("fileName").textContent="選擇圖片或影片"}updateRoute()};
+  $("processingMode").onchange=updateRoute;$("consent").onchange=updateStartButton;
+  ["dragenter","dragover"].forEach(n=>$("dropzone").addEventListener(n,e=>{e.preventDefault();$("dropzone").classList.add("drag")}));["dragleave","drop"].forEach(n=>$("dropzone").addEventListener(n,e=>{$("dropzone").classList.remove("drag");if(n==="drop"){e.preventDefault();const f=e.dataTransfer.files[0];if(f){state.file=f;$("fileName").textContent=f.name;$("fileMeta").textContent=`${formatBytes(f.size)} · ${f.type||"未知格式"}`;updateRoute()}}}));
+
+  function showUpload(stage,percent){$("uploadProgress").hidden=false;$("uploadStage").textContent=stage;$("uploadPercent").textContent=`${percent.toFixed(1)}%`;$("uploadProgress").querySelector(".progress span").style.width=`${Math.max(0,Math.min(100,percent))}%`}
+  function endUpload(){state.uploadAbort=null;$("uploadProgress").hidden=true;updateStartButton()}
+  $("stopUpload").onclick=()=>{if(state.uploadAbort){state.uploadAbort.abort();toast("已要求停止；已完成分段會保留供續傳")}};
+  $("startJob").onclick=async()=>{
+    if(!state.user||!state.file)return;const route=chooseRoute();state.uploadAbort=new AbortController();updateStartButton();
+    try{
+      if(route.mode==="browser_image")await runBrowserImage(state.file,state.uploadAbort.signal);
+      else if(route.mode==="direct_local")await runDirectLocal(state.file,state.uploadAbort.signal);
+      else await runCloudRelay(state.file,state.uploadAbort.signal);
+      toast("工作已建立");showView("jobs");
+    }catch(e){if(e.name==="AbortError")toast("上傳已停止，可從既有工作續傳");else toast(e.message||String(e),true)}finally{endUpload()}
+  };
+
+  async function fileFingerprint(file){const sample=1024*1024;const first=file.slice(0,Math.min(sample,file.size));const last=file.slice(Math.max(0,file.size-sample),file.size);return sha256Hex(new Blob([first,last,new TextEncoder().encode(`${file.name}|${file.size}|${file.lastModified}`)]))}
+  function baseJob(file,mode,transport,fingerprint){const id=crypto.randomUUID(),jobOptions={...options(),client_fingerprint:fingerprint};return {id,user_id:state.user.id,filename:file.name,safe_name:safeName(file.name),extension:extension(file.name),file_size:file.size,media_type:file.type||"application/octet-stream",preset:$("preset").value,target_height:Number($("targetHeight").value),options:jobOptions,status:"uploading",stage:"準備上傳",progress:0,processing_mode:mode,source_transport:transport,chunk_size:C.relayChunkBytes,total_parts:transport==="supabase_parts"?Math.ceil(file.size/C.relayChunkBytes):0,upload_complete:false,consent_at:new Date().toISOString(),disclaimer_version:C.disclaimerVersion,last_client_seen_at:new Date().toISOString()}}
+  async function insertJob(job){const {data,error}=await sb.from("restoration_jobs").insert(job).select().single();if(error)throw error;return data}
+  async function findResumableJob(file,transport,fingerprint){const {data,error}=await sb.from("restoration_jobs").select("*").eq("filename",file.name).eq("file_size",file.size).eq("source_transport",transport).eq("upload_complete",false).in("status",["uploading","ingesting"]).order("created_at",{ascending:false}).limit(10);if(error)throw error;return (data||[]).find(j=>j.options?.client_fingerprint===fingerprint)||null}
+
+  async function runDirectLocal(file,signal){
+    const health=await checkLocalWorker();if(!health?.ok)throw new Error("請先下載並啟動個人 Worker");if(!health.cloud_connected)throw new Error("Worker尚未設定雲端Token，請至個人Worker頁完成設定");
+    const pairing=localStorage.getItem("restorationPairing");if(!pairing)throw new Error("請先在個人Worker頁儲存本機配對密碼");
+    const fingerprint=await fileFingerprint(file);const existing=await findResumableJob(file,"direct_local",fingerprint);const job=existing||await insertJob(baseJob(file,"local_worker","direct_local",fingerprint));if(existing)toast("已找到未完成的本機工作，從既有offset續傳");
+    const headers={"x-restoration-pairing":pairing,"content-type":"application/json"};
+    let r=await fetch(`${C.localWorkerUrl}/v1/jobs`,{method:"POST",headers,body:JSON.stringify({job_id:job.id,filename:file.name,size:file.size,mime:file.type,preset:job.preset,target_height:job.target_height,options:job.options}),signal});
+    if(!r.ok)throw new Error(`Worker建立工作失敗: ${await r.text()}`);let local=await r.json();let 

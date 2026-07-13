@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "restoration-studio-worker"
+version = "0.5.0"
+description = "Durable local media restoration worker for Restoration Studio Cloud"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.116.1",
+  "uvicorn[standard]==0.35.0",
+  "httpx==0.28.1",
+  "opencv-python-headless==4.12.0.88",
+  "numpy==2.2.6",
+  "pydantic==2.11.7",
+]
+
+[project.optional-dependencies]
+test = ["pytest==8.4.1"]
+
+[project.scripts]
+restoration-worker = "restoration_worker.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["restoration_worker*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

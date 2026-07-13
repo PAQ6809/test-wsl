@@ -1,0 +1,7 @@
+"ghost">取消</button><button id="confirmOk" class="danger">確認</button></div></dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+  <script src="/config.js"></script>
+  <script src="/app.js" defer></script>
+</body>
+</html>

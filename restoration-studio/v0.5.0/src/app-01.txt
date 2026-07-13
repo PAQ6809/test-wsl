@@ -34,9 +34,11 @@
   document.addEventListener("click",event=>{const b=event.target.closest("[data-view]");if(b){event.preventDefault();showView(b.dataset.view)}});
 
   function setAuthUi(){
-    const logged=!!state.user; $("authButton").hidden=logged; $("logoutButton").hidden=!logged;
+    const logged=!!state.user;
+    const deletionPending=!!state.profile?.deletion_requested_at;
+    $("authButton").hidden=logged; $("logoutButton").hidden=!logged;
     $("identity").textContent=logged?(state.profile?.display_name||state.user.user_metadata?.display_name||state.user.email):"";
-    $("createUserHint").textContent=logged?"已登入，可建立工作":"登入後可建立工作";
+    $("createUserHint").textContent=!logged?"登入後可建立工作":deletionPending?"帳號刪除申請處理中":"已登入，可建立工作";
     $("accountLoggedOut").hidden=logged; $("accountContent").hidden=!logged;
     updateStartButton();
   }

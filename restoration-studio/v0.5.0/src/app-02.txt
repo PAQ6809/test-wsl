@@ -14,7 +14,7 @@
     return {mode,reason};
   }
   function updateRoute(){const route=chooseRoute();$("routeAdvice").textContent=route.reason;updateStartButton()}
-  function updateStartButton(){$("startJob").disabled=!(state.user&&state.file&&$("consent").checked&&!state.uploadAbort)}
+  function updateStartButton(){$("startJob").disabled=!(state.user&&state.file&&$("consent").checked&&!state.uploadAbort&&!state.profile?.deletion_requested_at)}
   $("mediaFile").onchange=()=>{state.file=$("mediaFile").files[0]||null;if(state.file){$("fileName").textContent=state.file.name;$("fileMeta").textContent=`${formatBytes(state.file.size)} · ${state.file.type||"未知格式"}`}else{$("fileName").textContent="選擇圖片或影片"}updateRoute()};
   $("processingMode").onchange=updateRoute;$("consent").onchange=updateStartButton;
   ["dragenter","dragover"].forEach(n=>$("dropzone").addEventListener(n,e=>{e.preventDefault();$("dropzone").classList.add("drag")}));["dragleave","drop"].forEach(n=>$("dropzone").addEventListener(n,e=>{$("dropzone").classList.remove("drag");if(n==="drop"){e.preventDefault();const f=e.dataTransfer.files[0];if(f){state.file=f;$("fileName").textContent=f.name;$("fileMeta").textContent=`${formatBytes(f.size)} · ${f.type||"未知格式"}`;updateRoute()}}}));

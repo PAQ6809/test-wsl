@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080b10">
+  <meta name="description" content="授權圖片與長影片的可恢復畫質修復工作台。">
+  <title>Restoration Studio Cloud</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="offline" class="offline" hidden>目前離線；本機工作仍可繼續，雲端同步會在連線恢復後重試。</div>
+  <div id="toast" class="toast" hidden></div>
+  <header class="topbar">
+    <button class="brand" data-view="home" aria-label="回首頁"><span>R</span> Restoration Studio <small>Cloud</small></button>
+    <nav id="nav" aria-label="主要導覽">
+      <button data-view="home" class="active">首頁</button>
+      <button data-view="create">建立工作</button>
+      <button data-view="jobs">我的工作</button>
+      <button data-view="workers">個人 Worker</button>
+      <button data-view="account">帳號</button>
+    </nav>
+    <div class="account-actions">
+      <span id="identity"></span>
+      <button id="installPwa" class="ghost" hidden>安裝</button>
+      <button id="authButton" class="secondary">登入</button>
+      <button id="logoutButton" class="ghost" hidden>登出</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-home" class="view active">
+      <div class="hero">
+        <div>
+          <div class="eyebrow">DURABLE MEDIA RESTORATION</div>
+          <h1>兩小時影片，<br><em>斷線也不用重來。</em></h1>
+          <p class="lead">以五分鐘檢查點、分段雜湊、個人運算節點與雲端工作紀錄，修復本人所有或已獲授權的圖片與影片。</p>
+          <div class="hero-actions"><button data-view="create" class="primary large">開始修復</button><button data-view="workers" class="secondary large">設定 Worker</button></div>
+          <div class="chips"><span>可續傳</span><span>可恢復</span><span>雲端帳號隔離</span><span>成品不降解析度</span><span>本機隱私模式</span></div>
+        </div>
+        <div class="status-panel panel">
+          <div class="panel-head"><div><div class="eyebrow">LIVE STATUS</div><h2>服務狀態</h2></div><span id="overallStatus" class="status checking">檢查中</span></div>
+          <div class="status-row"><span>公開網站</span><b class="good">正常</b></div>
+          <div class="status-row"><span>帳號與工作資料</span><b id="cloudStatus">檢查中</b></div>
+          <div class="status-row"><span>Worker API</span><b id="edgeStatus">檢查中</b></div>
+          <div class="status-row"><span>本機 Worker</span><b id="localStatus">未連線</b></div>
+          <div class="status-row"><span>版本</span><b id="versionLabel">—</b></div>
+          <p class="muted small">大型媒體預設在個人 Worker 處理；雲端只保存帳號、進度、分段中繼與稽核資料。</p>
+        </div>
+      </div>
+      <div class="feature-grid">
+        <article class="panel"><div class="number">01</div><h3>瀏覽器照片模式</h3><p>照片可直接在裝置上去噪、銳化與升級，再將成品安全存入個人雲端資料夾。</p></article>
+        <article class="panel"><div class="number">02</div><h3>直接本機模式</h3><p>長影片從瀏覽器分段送往 localhost，避免把數GB原始影片繞經第三方伺服器。</p></article>
+        <article class="panel"><div class="number">03</div><h3>雲端中繼模式</h3><p>跨裝置時以6MB加密傳輸分段中繼；Worker安全落盤後立即刪除中繼片段。</p></article>
+      </div>
+      <div class="panel truth"><div><div class="eyebrow">TRUTH POLICY</div><h2>清晰化不是時光機。</h2></div><p>系統可改善壓縮方塊、噪點、鋸齒、色帶、交錯與低解析度觀看品質；對已完整刪除、塗黑或刻意遮蔽的內容，只能生成推測，不會標示為真實還原。本服務禁止用於破解他人隱私遮蔽。</p></div>
+    </section>
+
+    <section id="view-create" class="view">
+      <div class="page-title"><div><div class="eyebrow">NEW RESTORATION</div><h1>建立修復工作</h1><p>系統會依檔案、Worker狀態與隱私偏好推薦處理路徑。</p></div><div id="createUserHint" class="pill">登入後可建立工作</div></div>
+      <div class="create-grid">
+        <div class="panel form-panel">
+          <label id="dropzone" class="dropzone" for="mediaFile">
+            <input id="mediaFile" type="file" accept="image/*,video/*" hidden>
+            <span class="drop-icon">＋</span><b id="fileName">選擇圖片或影片</b><small id="fileMeta">支援常見照片與影片格式；單一影片最長3小時。</small>
+          </label>
+          <div class="form-grid">
+            <label>處理路徑<select id="processingMode"><option value="auto">自動推薦</option><option value="browser_image">瀏覽器照片</option><option value="direct_local">直接本機 Worker</option><option value="cloud_relay">雲端分段中繼</option></select></label>
+            <label>輸出高度<select id="targetHeight"><option value="720">720p</option><option value="1080" selected>1080p</option><option value="1440">1440p</option><option value="2160">4K / 2160p</option></select></label>
+            <label>修復強度<select id="preset"><option value="light">保守</option><option value="balanced" selected>平衡</option><option value="strong">強力</option></select></label>
+            <label>輸出品質<select id="quality"><option value="18">高品質</option><option value="16" selected>極高品質</option><option value="14">近無損（檔案大）</option></select></label>
+          </div>
+          <details class="advanced"><summary>進階設定</summary><div class="checks"><label><input id="deblock" type="checkbox" checked> 去壓縮方塊</label><label><input id="denoise" type="checkbox" checked> 時空降噪</label><label><input id="deband" type="checkbox" checked> 去色帶</label><label><input id="sharpen" type="checkbox" checked> 受控銳化</label><label><input id="deinterlace" type="checkbox" checked> 自動去交錯</label></div></details>
+          <label class="consent"><input id="consent" type="checkbox"><span>我確認素材為本人所有或已取得合法授權，且不會用來破解他人隱私遮蔽、辨識匿名化人物或還原私密內容。</span></label>
+          <div id="routeAdvice" class="advice">選擇檔案後顯示建議。</div>
+          <button id="startJob" class="primary wide" disabled>開始建立工作</button>
+          <div id="uploadProgress" class="upload-progress" hidden><div class="progress"><span></span></div><div class="progress-copy"><b id="uploadStage">準備中</b><span id="uploadPercent">0%</span></div><button id="stopUpload" class="danger small">停止</button></div>
+        </div>

@@ -1,0 +1,40 @@
+offset=Number(local.received||0);const chunk=8*1024*1024;
+    while(offset<file.size){if(signal.aborted)throw new DOMException("Aborted","AbortError");const blob=file.slice(offset,Math.min(file.size,offset+chunk));r=await fetch(`${C.localWorkerUrl}/v1/jobs/${job.id}/chunk?offset=${offset}`,{method:"PUT",headers:{"x-restoration-pairing":pairing,"content-type":"application/octet-stream"},body:blob,signal});if(r.status===409){const detail=await r.json();offset=Number(detail.detail?.expected_offset||offset);continue}if(!r.ok)throw new Error(`本機分段上傳失敗: ${await r.text()}`);offset=Number((await r.json()).received);showUpload("直接傳送到個人Worker",offset/file.size*100)}
+    r=await fetch(`${C.localWorkerUrl}/v1/jobs/${job.id}/complete`,{method:"POST",headers:{"x-restoration-pairing":pairing},signal});if(!r.ok)throw new Error(`來源驗證失敗: ${await r.text()}`);showUpload("Worker已開始分段處理",100)
+  }
+
+  async function waitForBuffer(jobId,totalSize,signal){
+    while(true){if(signal.aborted)throw new DOMException("Aborted","AbortError");const {data,error}=await sb.from("restoration_jobs").select("uploaded_bytes,consumed_bytes").eq("id",jobId).single();if(error)throw error;const outstanding=Number(data.uploaded_bytes)-Number(data.consumed_bytes);if(outstanding<C.relayBufferBytes)return;showUpload(`雲端緩衝已達 ${formatBytes(outstanding)}，等待Worker安全落盤`,Math.min(99,Number(data.uploaded_bytes)/Math.max(1,totalSize)*100));await sleep(2500)}
+  }
+  async function runCloudRelay(file,signal){
+    const fingerprint=await fileFingerprint(file);const existingJob=await findResumableJob(file,"supabase_parts",fingerprint);const job=existingJob||await insertJob(baseJob(file,"cloud_relay","supabase_parts",fingerprint));if(existingJob)toast("已找到未完成的雲端中繼工作，從既有分段續傳");
+    const {data:existing,error:partsError}=await sb.from("restoration_upload_parts").select("part_number,status").eq("job_id",job.id);if(partsError)throw partsError;const done=new Set((existing||[]).map(p=>p.part_number));
+    for(let part=1;part<=job.total_parts;part++){
+      if(signal.aborted)throw new DOMException("Aborted","AbortError");if(done.has(part))continue;await waitForBuffer(job.id,file.size,signal);
+      const start=(part-1)*C.relayChunkBytes,end=Math.min(file.size,start+C.relayChunkBytes),blob=file.slice(start,end);const hash=await sha256Hex(blob);const objectPath=`${state.user.id}/${job.id}/input/${String(part).padStart(6,"0")}.part`;
+      const upload=await sb.storage.from(C.storageBucket).upload(objectPath,blob,{contentType:"application/octet-stream",upsert:false,cacheControl:"0"});if(upload.error&&!String(upload.error.message).includes("already exists"))throw upload.error;
+      const row=await sb.from("restoration_upload_parts").upsert({job_id:job.id,user_id:state.user.id,part_number:part,object_path:objectPath,size:blob.size,sha256:hash,status:"uploaded"},{onConflict:"job_id,part_number"});if(row.error)throw row.error;
+      showUpload(`安全上傳第 ${part}/${job.total_parts} 段`,end/file.size*100);
+    }
+    const final=await sb.rpc("restoration_finalize_upload",{p_job_id:job.id,p_input_sha256:null});if(final.error)throw final.error;showUpload("上傳完成，等待／通知Worker",100)
+  }
+
+  async function runBrowserImage(file,signal){
+    if(!file.type.startsWith("image/"))throw new Error("瀏覽器模式只支援照片");const bitmap=await createImageBitmap(file);if(bitmap.width*bitmap.height>C.maxBrowserImagePixels)throw new Error("圖片像素過大，請改用個人Worker");
+    const fingerprint=await fileFingerprint(file);const job=await insertJob({...baseJob(file,"browser_image","browser_memory",fingerprint),status:"processing",stage:"瀏覽器正在修復照片",upload_complete:true,total_parts:0});
+    showUpload("解碼與高品質放大",12);const target=Math.max(bitmap.height,Number($("targetHeight").value));const scale=target/bitmap.height;const width=Math.round(bitmap.width*scale);const canvas=document.createElement("canvas");canvas.width=width;canvas.height=target;const ctx=canvas.getContext("2d",{willReadFrequently:true});ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";ctx.drawImage(bitmap,0,0,width,target);bitmap.close();
+    if(signal.aborted)throw new DOMException("Aborted","AbortError");showUpload("受控銳化與細節整理",45);let image=ctx.getImageData(0,0,width,target);const strength={light:.28,balanced:.48,strong:.68}[$("preset").value];image=await processPixels(image,strength);ctx.putImageData(image,0,0);
+    let quality=.95;let blob=await new Promise(r=>canvas.toBlob(r,"image/jpeg",quality));while(blob.size>30*1024**2&&quality>.72){quality-=.05;blob=await new Promise(r=>canvas.toBlob(r,"image/jpeg",quality))}if(!blob)throw new Error("無法建立圖片成品");
+    showUpload("加密上傳個人雲端成品",78);const objectPath=`${state.user.id}/${job.id}/output/restored-${safeName(file.name).replace(/\.[^.]+$/,".jpg")}`;const upload=await sb.storage.from(C.storageBucket).upload(objectPath,blob,{contentType:"image/jpeg",upsert:false});if(upload.error)throw upload.error;const hash=await sha256Hex(blob);
+    const metadata={kind:"browser_image",input_resolution:[Math.round(width/scale),Math.round(target/scale)],output_resolution:[width,target],preset:$("preset").value,quality,truth_note:"改善觀看品質，不宣稱找回已刪除或刻意遮蔽的原始像素。"};const completed=await sb.rpc("restoration_complete_browser_image",{p_job_id:job.id,p_object_path:objectPath,p_size:blob.size,p_sha256:hash,p_mime:"image/jpeg",p_metadata:metadata});if(completed.error)throw completed.error;showUpload("照片修復完成",100)
+  }
+  async function processPixels(imageData,strength){
+    if(!window.Worker)return imageData;return new Promise((resolve,reject)=>{const worker=new Worker("/image-worker.js");worker.onmessage=e=>{imageData.data.set(new Uint8ClampedArray(e.data.pixels));worker.terminate();resolve(imageData)};worker.onerror=e=>{worker.terminate();reject(e)};worker.postMessage({pixels:imageData.data.buffer,width:imageData.width,height:imageData.height,strength},[imageData.data.buffer])})
+  }
+
+  async function loadJobs(){
+    if(!state.user){state.jobs=[];renderJobs();return}const {data,error}=await sb.from("restoration_jobs").select("*").order("created_at",{ascending:false}).limit(100);if(error){toast(error.message,true);return}state.jobs=data||[];renderJobs()
+  }
+  function filteredJobs(){const f=$("jobFilter").value;return state.jobs.filter(j=>f==="all"||(f==="active"&&ACTIVE.has(j.status))||(f==="completed"&&j.status==="completed")||(f==="failed"&&["failed","cancelled","expired"].includes(j.status)))}
+  function renderJobs(){
+    const counts={all:state.jobs.length,active:state.jobs.filter(j=>ACTIVE.has(j.status)).length,completed:state.jobs.filter(j=>j.status==="completed").length,failed:state.jobs.filter(j=>["failed","cancelled"].includes(j.status)).length}

@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /restoration-studio/v0.5.0/worker
+    schedule:
+      interval: weekly
+      day: monday
+      time: '03:00'
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 5
+    labels: [dependencies, restoration-studio]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '03:30'
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 5
+    labels: [dependencies, restoration-studio]

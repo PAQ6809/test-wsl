@@ -1,0 +1,7 @@
+aPrompt=null;$("installPwa").hidden=true}};
+  window.addEventListener("online",()=>$("offline").hidden=true);window.addEventListener("offline",()=>$("offline").hidden=false);$("offline").hidden=navigator.onLine;
+  if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(console.warn));
+  $("versionLabel").textContent=C.version;$("footerVersion").textContent=C.version;$("pairingSecret").value=localStorage.getItem("restorationPairing")||"";
+  const initial=location.hash.slice(1);if(["home","create","jobs","workers","account"].includes(initial))showView(initial);
+  initAuth();checkLocalWorker();setInterval(()=>{checkCloud();checkLocalWorker();if(state.user)loadWorkers()},30000);
+})();

@@ -1,0 +1,82 @@
+(() => {
+  "use strict";
+  const C = window.RESTORATION_CONFIG;
+  const sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+  const $ = id => document.getElementById(id);
+  const state = { session:null, user:null, profile:null, jobs:[], workers:[], tokens:[], file:null,
+    localHealth:null, uploadAbort:null, realtime:null, pwaPrompt:null, currentJob:null };
+  const ACTIVE = new Set(["uploading","ingesting","queued","processing"]);
+  const FINAL = new Set(["completed","failed","cancelled","expired"]);
+
+  function toast(message, isError=false){
+    const el=$("toast"); el.textContent=message; el.className="toast"+(isError?" error":""); el.hidden=false;
+    clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.hidden=true,4200);
+  }
+  function formatBytes(n){n=Number(n||0);if(!n)return "0 B";const u=["B","KB","MB","GB","TB"];const i=Math.min(u.length-1,Math.floor(Math.log(n)/Math.log(1024)));return `${(n/1024**i).toFixed(i?1:0)} ${u[i]}`}
+  function formatDate(v){return v?new Intl.DateTimeFormat("zh-TW",{dateStyle:"medium",timeStyle:"short"}).format(new Date(v)):"—"}
+  function safeName(name){const dot=name.lastIndexOf(".");const ext=dot>=0?name.slice(dot).toLowerCase():"";const stem=(dot>=0?name.slice(0,dot):name).replace(/[^A-Za-z0-9._-]+/g,"_").replace(/^[._]+|[._]+$/g,"").slice(0,100)||"media";return stem+ext}
+  function extension(name){const i=name.lastIndexOf(".");return i>=0?name.slice(i).toLowerCase():""}
+  function options(){return {deblock:$("deblock").checked,denoise:$("denoise").checked,deband:$("deband").checked,sharpen:$("sharpen").checked,deinterlace:$("deinterlace").checked,crf:Number($("quality").value),ai_adapter:"none"}}
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  async function sha256Hex(data){const buf=data instanceof ArrayBuffer?data:await data.arrayBuffer();const digest=await crypto.subtle.digest("SHA-256",buf);return [...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,"0")).join("")}
+  function downloadText(name,text,type="application/json"){const blob=new Blob([text],{type});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}
+  async function copy(text){await navigator.clipboard.writeText(text);toast("已複製")}
+
+  function showView(name){
+    document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===`view-${name}`));
+    document.querySelectorAll("[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===name && b.closest("nav")));
+    history.replaceState(null,"",`#${name}`);
+    if(name==="jobs") loadJobs(); if(name==="workers") loadWorkers(); if(name==="account") renderAccount();
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
+  document.addEventListener("click",event=>{const b=event.target.closest("[data-view]");if(b){event.preventDefault();showView(b.dataset.view)}});
+
+  function setAuthUi(){
+    const logged=!!state.user; $("authButton").hidden=logged; $("logoutButton").hidden=!logged;
+    $("identity").textContent=logged?(state.profile?.display_name||state.user.user_metadata?.display_name||state.user.email):"";
+    $("createUserHint").textContent=logged?"已登入，可建立工作":"登入後可建立工作";
+    $("accountLoggedOut").hidden=logged; $("accountContent").hidden=!logged;
+    updateStartButton();
+  }
+  async function ensureProfile(){
+    if(!state.user)return;
+    let {data,error}=await sb.from("restoration_profiles").select("*").eq("id",state.user.id).maybeSingle();
+    if(error)throw error;
+    if(!data){const created=await sb.from("restoration_profiles").insert({id:state.user.id,display_name:state.user.user_metadata?.display_name||state.user.email.split("@")[0]}).select().single();if(created.error)throw created.error;data=created.data}
+    state.profile=data;
+  }
+  async function applySession(session){
+    state.session=session; state.user=session?.user||null; state.profile=null;
+    if(state.user){try{await ensureProfile()}catch(e){toast(e.message,true)}}
+    setAuthUi(); await Promise.all([checkCloud(),loadJobs(),loadWorkers()]); renderAccount();
+    subscribeRealtime();
+  }
+  async function initAuth(){const {data:{session}}=await sb.auth.getSession();await applySession(session);sb.auth.onAuthStateChange((_e,s)=>setTimeout(()=>applySession(s),0))}
+
+  function authTab(name){
+    [["login","loginForm"],["signup","signupForm"],["reset","resetForm"]].forEach(([n,id])=>{$(id).hidden=n!==name;$(`${n}Tab`).classList.toggle("active",n===name)});
+    $("authTitle").textContent={login:"登入",signup:"建立帳號",reset:"重設密碼"}[name]; $("authError").hidden=true;
+  }
+  $("authButton").onclick=()=>$("authDialog").showModal(); $("closeAuth").onclick=()=>$("authDialog").close();
+  $("loginTab").onclick=()=>authTab("login"); $("signupTab").onclick=()=>authTab("signup"); $("resetTab").onclick=()=>authTab("reset");
+  function authError(e){$("authError").textContent=e.message||String(e);$("authError").hidden=false}
+  $("loginForm").onsubmit=async e=>{e.preventDefault();const {error}=await sb.auth.signInWithPassword({email:$("loginEmail").value,password:$("loginPassword").value});if(error)return authError(error);$("authDialog").close();toast("登入成功")};
+  $("signupForm").onsubmit=async e=>{e.preventDefault();const {data,error}=await sb.auth.signUp({email:$("signupEmail").value,password:$("signupPassword").value,options:{data:{display_name:$("signupName").value.trim()}}});if(error)return authError(error);$("authDialog").close();toast(data.session?"帳號建立完成":"請至信箱完成驗證")};
+  $("resetForm").onsubmit=async e=>{e.preventDefault();const {error}=await sb.auth.resetPasswordForEmail($("resetEmail").value,{redirectTo:`${location.origin}/#account`});if(error)return authError(error);$("authDialog").close();toast("重設信已寄出")};
+  $("logoutButton").onclick=async()=>{await sb.auth.signOut();toast("已登出")};
+
+  async function checkCloud(){
+    try{
+      const {error}=await sb.from("restoration_profiles").select("id").limit(1);if(error && state.user)throw error;
+      $("cloudStatus").textContent="正常";$("cloudStatus").className="good";
+    }catch(e){$("cloudStatus").textContent="異常";$("cloudStatus").className="bad"}
+    try{const r=await fetch(`${C.workerApiUrl}/health`,{cache:"no-store"});if(!r.ok)throw new Error();$("edgeStatus").textContent="正常";$("edgeStatus").className="good"}catch(e){$("edgeStatus").textContent="無法連線";$("edgeStatus").className="bad"}
+    const okay=$("cloudStatus").className==="good"&&$("edgeStatus").className==="good";$("overallStatus").textContent=okay?"正常":"部分異常";$("overallStatus").className=`status ${okay?"good":"warning"}`;
+  }
+
+  async function checkLocalWorker(showToast=false){
+    try{
+      const controller=new AbortController();setTimeout(()=>controller.abort(),2500);
+      const 
